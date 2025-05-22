@@ -16,7 +16,7 @@ function Footer() {
       }}
     >
       <Typography variant="body2">
-        © {new Date().getFullYear()} CRM Moderno - Tutti i diritti riservati
+        © {new Date().getFullYear()} CRM Custom by Lorenzo Acerbo - Tutti i diritti riservati
       </Typography>
     </Box>
   )

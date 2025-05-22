@@ -177,7 +177,7 @@ function Navbar({ onLogout }) {
     <AppBar position="static">
       <Toolbar>
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          CRM Moderno
+          CRM Custom
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Tooltip title="Importa CSV">
