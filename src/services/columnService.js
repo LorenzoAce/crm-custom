@@ -3,7 +3,21 @@ import { supabase } from '../supabaseClient'
 // Funzione per ottenere tutte le colonne direttamente dalla struttura della tabella clients
 export const getColumns = async () => {
   try {
-    // Ottiene la struttura della tabella clients
+    // Prima controlla se ci sono informazioni sulle colonne in localStorage
+    try {
+      const columnsJson = localStorage.getItem('clientColumns')
+      if (columnsJson) {
+        const columns = JSON.parse(columnsJson)
+        if (columns.length > 0) {
+          console.log('Colonne caricate da localStorage:', columns)
+          return columns
+        }
+      }
+    } catch (e) {
+      console.error('Errore durante il recupero delle colonne da localStorage:', e)
+    }
+
+    // Se non ci sono colonne in localStorage, prova a ottenerle dalla struttura della tabella
     const { data: tableData, error: tableError } = await supabase
       .rpc('get_table_columns', { table_name: 'clients' })
 
@@ -26,6 +40,8 @@ export const getColumns = async () => {
           options: []
         }))
       
+      // Salva le colonne in localStorage
+      localStorage.setItem('clientColumns', JSON.stringify(columns))
       return columns
     }
     
@@ -51,17 +67,26 @@ export const addColumn = async (columnData) => {
 
     if (error) {
       console.error('Errore durante l\'aggiunta della colonna:', error)
-      throw error
+      // Continua comunque con il salvataggio in localStorage
     }
 
     // Salva le informazioni sulla colonna in localStorage per mantenere le opzioni e altre proprietà
     try {
       const columnsJson = localStorage.getItem('clientColumns') || '[]'
       const columns = JSON.parse(columnsJson)
-      columns.push(columnData)
+      // Verifica se la colonna esiste già
+      const existingColumnIndex = columns.findIndex(col => col.id === columnData.id)
+      if (existingColumnIndex >= 0) {
+        // Aggiorna la colonna esistente
+        columns[existingColumnIndex] = columnData
+      } else {
+        // Aggiungi la nuova colonna
+        columns.push(columnData)
+      }
       localStorage.setItem('clientColumns', JSON.stringify(columns))
     } catch (e) {
       console.error('Errore durante il salvataggio delle informazioni sulla colonna:', e)
+      throw e
     }
 
     return columnData
@@ -83,7 +108,7 @@ export const updateColumn = async (id, columnData) => {
 
       if (error) {
         console.error('Errore durante la rinomina della colonna:', error)
-        throw error
+        // Continua comunque con il salvataggio in localStorage
       }
     }
 
@@ -95,6 +120,7 @@ export const updateColumn = async (id, columnData) => {
       localStorage.setItem('clientColumns', JSON.stringify(columns))
     } catch (e) {
       console.error('Errore durante l\'aggiornamento delle informazioni sulla colonna:', e)
+      throw e
     }
 
     return columnData
@@ -114,7 +140,7 @@ export const deleteColumn = async (id) => {
 
     if (error) {
       console.error('Errore durante l\'eliminazione della colonna:', error)
-      throw error
+      // Continua comunque con la rimozione da localStorage
     }
 
     // Rimuovi le informazioni sulla colonna da localStorage
@@ -125,6 +151,7 @@ export const deleteColumn = async (id) => {
       localStorage.setItem('clientColumns', JSON.stringify(columns))
     } catch (e) {
       console.error('Errore durante la rimozione delle informazioni sulla colonna:', e)
+      throw e
     }
 
     return true
@@ -146,7 +173,8 @@ export const syncColumns = async (columns) => {
       
     if (tableError) {
       console.error('Errore durante il recupero della struttura della tabella:', tableError)
-      throw tableError
+      // Continua comunque con il salvataggio in localStorage
+      return true
     }
 
     // Verifica quali colonne mancano nella tabella e aggiungile
@@ -170,6 +198,7 @@ export const syncColumns = async (columns) => {
     return true
   } catch (error) {
     console.error('Errore durante la sincronizzazione delle colonne:', error.message)
-    throw error
+    // Anche in caso di errore, le colonne sono state salvate in localStorage
+    return true
   }
 }

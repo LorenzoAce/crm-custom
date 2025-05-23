@@ -173,6 +173,8 @@ function Dashboard() {
           const columnsJson = localStorage.getItem('clientColumns')
           if (columnsJson) {
             columnsData = JSON.parse(columnsJson)
+            // Imposta immediatamente le colonne da localStorage
+            setColumns(columnsData)
           }
         } catch (e) {
           console.error('Errore durante il recupero delle colonne da localStorage:', e)
@@ -181,15 +183,18 @@ function Dashboard() {
         // Se non ci sono colonne in localStorage, prova a caricarle da Supabase
         if (columnsData.length === 0) {
           columnsData = await getColumns()
-        }
-        
-        // Se ancora non ci sono colonne, usa quelle predefinite
-        if (columnsData.length > 0) {
-          setColumns(columnsData)
-        } else {
-          // Sincronizza le colonne predefinite
-          await syncColumns(initialColumns)
-          setColumns(initialColumns)
+          
+          // Se abbiamo trovato colonne in Supabase, salviamole in localStorage
+          if (columnsData.length > 0) {
+            localStorage.setItem('clientColumns', JSON.stringify(columnsData))
+            setColumns(columnsData)
+          } else {
+            // Se ancora non ci sono colonne, usa quelle predefinite
+            // Sincronizza le colonne predefinite
+            await syncColumns(initialColumns)
+            localStorage.setItem('clientColumns', JSON.stringify(initialColumns))
+            setColumns(initialColumns)
+          }
         }
         
         // Carica i clienti
@@ -494,9 +499,6 @@ function Dashboard() {
                 // Sincronizza le colonne con Supabase
                 await syncColumns(columns)
                 
-                // Salva le colonne in localStorage
-                localStorage.setItem('clientColumns', JSON.stringify(columns))
-                
                 // Ricarica le colonne dalla struttura della tabella
                 const updatedColumns = await getColumns()
                 if (updatedColumns.length > 0) {
@@ -507,6 +509,7 @@ function Dashboard() {
                   })
                   
                   setColumns(mergedColumns)
+                  // Assicurati che le colonne aggiornate siano salvate in localStorage
                   localStorage.setItem('clientColumns', JSON.stringify(mergedColumns))
                 }
                 
