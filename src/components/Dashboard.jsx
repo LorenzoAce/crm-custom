@@ -68,7 +68,7 @@ function Dashboard() {
       try {
         const newColumnWithOrder = {
           ...newColumn,
-          id: newColumn.label.toLowerCase(),
+          id: newColumn.label.toLowerCase().replace(/\s+/g, '_'),  // Sostituisci spazi con underscore
           order: newColumn.order || columns.length + 1,
           options: newColumn.options || []
         }
@@ -79,6 +79,9 @@ function Dashboard() {
         // Aggiorna lo stato locale
         const sortedColumns = [...columns, newColumnWithOrder].sort((a, b) => a.order - b.order)
         setColumns(sortedColumns)
+        
+        // Salva le colonne aggiornate in localStorage
+        localStorage.setItem('clientColumns', JSON.stringify(sortedColumns))
         
         setSnackbar({
           open: true,
@@ -109,13 +112,22 @@ function Dashboard() {
     if (editingColumn) {
       setLoading(true)
       try {
+        // Se l'ID è stato modificato, assicurati che sia in formato valido
+        if (editingColumn.id !== editingColumn.id.toLowerCase().replace(/\s+/g, '_')) {
+          editingColumn.id = editingColumn.id.toLowerCase().replace(/\s+/g, '_')
+        }
+        
         // Aggiorna la colonna in Supabase
         await updateColumn(editingColumn.id, editingColumn)
         
         // Aggiorna lo stato locale
-        setColumns(columns.map(col => 
+        const updatedColumns = columns.map(col => 
           col.id === editingColumn.id ? editingColumn : col
-        ))
+        )
+        setColumns(updatedColumns)
+        
+        // Salva le colonne aggiornate in localStorage
+        localStorage.setItem('clientColumns', JSON.stringify(updatedColumns))
         
         setSnackbar({
           open: true,
@@ -154,11 +166,28 @@ function Dashboard() {
       setError(null)
       try {
         // Carica le colonne
-        const columnsData = await getColumns()
+        let columnsData = []
+        
+        // Prima controlla se ci sono informazioni sulle colonne in localStorage
+        try {
+          const columnsJson = localStorage.getItem('clientColumns')
+          if (columnsJson) {
+            columnsData = JSON.parse(columnsJson)
+          }
+        } catch (e) {
+          console.error('Errore durante il recupero delle colonne da localStorage:', e)
+        }
+        
+        // Se non ci sono colonne in localStorage, prova a caricarle da Supabase
+        if (columnsData.length === 0) {
+          columnsData = await getColumns()
+        }
+        
+        // Se ancora non ci sono colonne, usa quelle predefinite
         if (columnsData.length > 0) {
           setColumns(columnsData)
         } else {
-          // Se non ci sono colonne nel database, sincronizza quelle predefinite
+          // Sincronizza le colonne predefinite
           await syncColumns(initialColumns)
           setColumns(initialColumns)
         }
@@ -462,7 +491,25 @@ function Dashboard() {
             onClick={async () => {
               setLoading(true)
               try {
+                // Sincronizza le colonne con Supabase
                 await syncColumns(columns)
+                
+                // Salva le colonne in localStorage
+                localStorage.setItem('clientColumns', JSON.stringify(columns))
+                
+                // Ricarica le colonne dalla struttura della tabella
+                const updatedColumns = await getColumns()
+                if (updatedColumns.length > 0) {
+                  // Mantieni le opzioni e altre proprietà dalle colonne esistenti
+                  const mergedColumns = updatedColumns.map(newCol => {
+                    const existingCol = columns.find(col => col.id === newCol.id)
+                    return existingCol ? { ...newCol, options: existingCol.options } : newCol
+                  })
+                  
+                  setColumns(mergedColumns)
+                  localStorage.setItem('clientColumns', JSON.stringify(mergedColumns))
+                }
+                
                 setSnackbar({
                   open: true,
                   message: 'Colonne sincronizzate con successo',
