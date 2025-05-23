@@ -23,20 +23,24 @@ export const getClients = async () => {
 // Funzione per aggiungere un nuovo cliente
 export const addClient = async (clientData) => {
   try {
+    if (!clientData.ragioneSociale) {
+      throw new Error("Il campo 'ragioneSociale' è obbligatorio.");
+    }
+
     const { data, error } = await supabase
       .from('clients')
       .insert([clientData])
-      .select()
+      .select();
 
     if (error) {
-      console.error('Errore durante l\'aggiunta del cliente:', error)
-      throw error
+      console.error('Errore durante l\'aggiunta del cliente:', error);
+      throw error;
     }
 
-    return data[0]
+    return data?.[0] || null;
   } catch (error) {
-    console.error('Errore durante l\'aggiunta del cliente:', error.message)
-    throw error
+    console.error('Errore durante l\'aggiunta del cliente:', error.message);
+    throw error;
   }
 }
 
