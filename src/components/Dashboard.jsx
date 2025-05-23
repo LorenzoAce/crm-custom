@@ -20,6 +20,9 @@ import {
   MenuItem,
   Typography,
   InputAdornment,
+  CircularProgress,
+  Snackbar,
+  Alert,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -28,6 +31,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import ModeEditIcon from '@mui/icons-material/ModeEdit'
 import SearchIcon from '@mui/icons-material/Search'
 import ClearIcon from '@mui/icons-material/Clear'
+import { getClients, addClient, updateClient, deleteClient } from '../services/clientService'
 
 const initialColumns = [
   { id: 'ragioneSociale', label: 'R.Sociale', order: 1, options: [] },
@@ -48,6 +52,9 @@ function Dashboard() {
   const [openColumnDialog, setOpenColumnDialog] = useState(false)
   const [editingColumn, setEditingColumn] = useState(null)
   const [openEditColumnDialog, setOpenEditColumnDialog] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
   const [newOption, setNewOption] = useState('')
   const [editingOption, setEditingOption] = useState('')
   const [searchText, setSearchText] = useState('')
@@ -94,41 +101,117 @@ function Dashboard() {
     setOpenDialog(false)
   }
 
-  // Carica i contatti dal localStorage all'avvio
+  // Carica i contatti da Supabase all'avvio
   useEffect(() => {
-    const savedContacts = JSON.parse(localStorage.getItem('contacts') || '[]')
-    if (savedContacts.length > 0) {
-      setContacts(savedContacts)
+    const fetchClients = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const clientsData = await getClients()
+        setContacts(clientsData)
+        setSnackbar({
+          open: true,
+          message: 'Clienti caricati con successo',
+          severity: 'success'
+        })
+      } catch (err) {
+        console.error('Errore durante il caricamento dei clienti:', err)
+        setError('Errore durante il caricamento dei clienti')
+        setSnackbar({
+          open: true,
+          message: 'Errore durante il caricamento dei clienti',
+          severity: 'error'
+        })
+      } finally {
+        setLoading(false)
+      }
     }
+
+    fetchClients()
   }, [])
 
-  // Salva i contatti nel localStorage quando cambiano
-  useEffect(() => {
-    if (contacts.length > 0) {
-      localStorage.setItem('contacts', JSON.stringify(contacts))
+  const handleSaveContact = async () => {
+    setLoading(true)
+    try {
+      if (editingContact.id) {
+        // Aggiorna un cliente esistente
+        const updatedClient = await updateClient(editingContact.id, editingContact)
+        setContacts(contacts.map(c => c.id === editingContact.id ? updatedClient : c))
+        setSnackbar({
+          open: true,
+          message: 'Cliente aggiornato con successo',
+          severity: 'success'
+        })
+      } else {
+        // Aggiungi un nuovo cliente
+        const newClient = await addClient(editingContact)
+        setContacts([...contacts, newClient])
+        setSnackbar({
+          open: true,
+          message: 'Cliente aggiunto con successo',
+          severity: 'success'
+        })
+      }
+      handleCloseDialog()
+    } catch (err) {
+      console.error('Errore durante il salvataggio del cliente:', err)
+      setSnackbar({
+        open: true,
+        message: 'Errore durante il salvataggio del cliente',
+        severity: 'error'
+      })
+    } finally {
+      setLoading(false)
     }
-  }, [contacts])
-
-  const handleSaveContact = () => {
-    if (editingContact.id) {
-      setContacts(contacts.map(c => c.id === editingContact.id ? editingContact : c))
-    } else {
-      setContacts([...contacts, { ...editingContact, id: Date.now().toString() }])
-    }
-    handleCloseDialog()
   }
 
-  const handleDeleteContact = (id) => {
-    setContacts(contacts.filter(c => c.id !== id))
+  const handleDeleteContact = async (id) => {
+    setLoading(true)
+    try {
+      await deleteClient(id)
+      setContacts(contacts.filter(c => c.id !== id))
+      setSnackbar({
+        open: true,
+        message: 'Cliente eliminato con successo',
+        severity: 'success'
+      })
+    } catch (err) {
+      console.error('Errore durante l\'eliminazione del cliente:', err)
+      setSnackbar({
+        open: true,
+        message: 'Errore durante l\'eliminazione del cliente',
+        severity: 'error'
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDuplicateContact = (contact) => {
-    const newContact = {
-      ...contact,
-      id: Date.now().toString(),
-      ragioneSociale: `${contact.ragioneSociale} (Copia)`,
+  const handleDuplicateContact = async (contact) => {
+    setLoading(true)
+    try {
+      const newContactData = {
+        ...contact,
+        id: undefined, // Rimuovi l'ID per creare un nuovo record
+        ragioneSociale: `${contact.ragioneSociale} (Copia)`,
+      }
+      const newClient = await addClient(newContactData)
+      setContacts([...contacts, newClient])
+      setSnackbar({
+        open: true,
+        message: 'Cliente duplicato con successo',
+        severity: 'success'
+      })
+    } catch (err) {
+      console.error('Errore durante la duplicazione del cliente:', err)
+      setSnackbar({
+        open: true,
+        message: 'Errore durante la duplicazione del cliente',
+        severity: 'error'
+      })
+    } finally {
+      setLoading(false)
     }
-    setContacts([...contacts, newContact])
   }
 
   // Gestisce il cambiamento del testo di ricerca
@@ -167,8 +250,45 @@ function Dashboard() {
     setFilteredContacts(result)
   }, [contacts, searchText, selectedColumns, columns])
 
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false })
+  }
+
   return (
     <Box sx={{ position: 'relative', minHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Indicatore di caricamento */}
+      {loading && (
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+          zIndex: 1000
+        }}>
+          <CircularProgress />
+        </Box>
+      )}
+      
+      {/* Snackbar per i messaggi */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
       {/* Barra di ricerca globale */}
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>

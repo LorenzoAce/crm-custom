@@ -6,14 +6,17 @@ import {
   Button,
   Typography,
   Alert,
+  CircularProgress,
 } from '@mui/material'
+import { signInWithEmail } from '../../services/authService'
 
 function Login({ onLogin }) {
   const [credentials, setCredentials] = useState({
-    username: '',
+    email: '',
     password: '',
   })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -25,11 +28,19 @@ function Login({ onLogin }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    // TODO: Implementare la vera autenticazione con il backend
-    if (credentials.username === 'admin' && credentials.password === 'password') {
-      onLogin()
-    } else {
-      setError('Credenziali non valide')
+    setLoading(true)
+    setError('')
+    
+    try {
+      const { user } = await signInWithEmail(credentials.email, credentials.password)
+      if (user) {
+        onLogin()
+      }
+    } catch (err) {
+      console.error('Errore di login:', err)
+      setError(err.message || 'Errore durante il login. Verifica le tue credenziali.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -67,13 +78,14 @@ function Login({ onLogin }) {
             margin="normal"
             required
             fullWidth
-            id="username"
-            label="Nome utente"
-            name="username"
-            autoComplete="username"
+            id="email"
+            label="Email"
+            name="email"
+            autoComplete="email"
             autoFocus
-            value={credentials.username}
+            value={credentials.email}
             onChange={handleChange}
+            disabled={loading}
           />
           <TextField
             margin="normal"
@@ -86,14 +98,16 @@ function Login({ onLogin }) {
             autoComplete="current-password"
             value={credentials.password}
             onChange={handleChange}
+            disabled={loading}
           />
           <Button
             type="submit"
             fullWidth
             variant="contained"
             sx={{ mt: 3, mb: 2 }}
+            disabled={loading}
           >
-            Accedi
+            {loading ? <CircularProgress size={24} color="inherit" /> : 'Accedi'}
           </Button>
         </Box>
       </Paper>

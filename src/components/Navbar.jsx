@@ -15,10 +15,14 @@ import {
   TextField,
   Box,
   Tooltip,
+  CircularProgress,
+  Snackbar,
+  Alert,
 } from '@mui/material'
 import { AccountCircle } from '@mui/icons-material'
 import FileUploadIcon from '@mui/icons-material/FileUpload'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import { signOut } from '../services/authService'
 
 function Navbar({ onLogout }) {
   const [anchorEl, setAnchorEl] = useState(null)
@@ -28,6 +32,8 @@ function Navbar({ onLogout }) {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [username, setUsername] = useState('Admin') // Placeholder, da sostituire con dati reali
   const [fileInput, setFileInput] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget)
@@ -48,6 +54,29 @@ function Navbar({ onLogout }) {
     // TODO: Implementare la logica per l'aggiornamento del profilo
     setOpenProfileDialog(false)
     handleClose()
+  }
+
+  const handleLogout = async () => {
+    setLoading(true)
+    try {
+      await signOut()
+      onLogout()
+      setSnackbar({
+        open: true,
+        message: 'Logout effettuato con successo',
+        severity: 'success'
+      })
+    } catch (err) {
+      console.error('Errore durante il logout:', err)
+      setSnackbar({
+        open: true,
+        message: 'Errore durante il logout',
+        severity: 'error'
+      })
+    } finally {
+      setLoading(false)
+      handleClose()
+    }
   }
 
   // Funzione per esportare i contatti in formato CSV
@@ -173,9 +202,15 @@ function Navbar({ onLogout }) {
     }
   }
 
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false })
+  }
+
   return (
-    <AppBar position="static">
-      <Toolbar>
+    <>
+      <AppBar position="static">
+        <Toolbar>
+          {loading && <CircularProgress color="inherit" size={24} sx={{ mr: 2 }} />}
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
           CRM Custom
         </Typography>
@@ -229,7 +264,7 @@ function Navbar({ onLogout }) {
           }}>
             Cambia Password
           </MenuItem>
-          <MenuItem onClick={onLogout}>Logout</MenuItem>
+          <MenuItem onClick={handleLogout}>Logout</MenuItem>
         </Menu>
 
         <Dialog open={openPasswordDialog} onClose={() => setOpenPasswordDialog(false)}>
@@ -272,6 +307,22 @@ function Navbar({ onLogout }) {
         </Dialog>
       </Toolbar>
     </AppBar>
+      
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   )
 }
 
