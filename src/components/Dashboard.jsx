@@ -32,6 +32,7 @@ import ModeEditIcon from '@mui/icons-material/ModeEdit'
 import SearchIcon from '@mui/icons-material/Search'
 import ClearIcon from '@mui/icons-material/Clear'
 import { getClients, addClient, updateClient, deleteClient } from '../services/clientService'
+import { getColumns, addColumn, updateColumn, deleteColumn, syncColumns } from '../services/columnService'
 
 const initialColumns = [
   { id: 'ragioneSociale', label: 'R.Sociale', order: 1, options: [] },
@@ -61,18 +62,41 @@ function Dashboard() {
   const [selectedColumns, setSelectedColumns] = useState([])
   const [filteredContacts, setFilteredContacts] = useState([])
 
-  const handleAddColumn = () => {
+  const handleAddColumn = async () => {
     if (newColumn.label) {
-      const newColumnWithOrder = {
-        ...newColumn,
-        id: newColumn.label.toLowerCase(),
-        order: newColumn.order || columns.length + 1,
-        options: newColumn.options || []
+      setLoading(true)
+      try {
+        const newColumnWithOrder = {
+          ...newColumn,
+          id: newColumn.label.toLowerCase(),
+          order: newColumn.order || columns.length + 1,
+          options: newColumn.options || []
+        }
+        
+        // Aggiungi la colonna a Supabase
+        await addColumn(newColumnWithOrder)
+        
+        // Aggiorna lo stato locale
+        const sortedColumns = [...columns, newColumnWithOrder].sort((a, b) => a.order - b.order)
+        setColumns(sortedColumns)
+        
+        setSnackbar({
+          open: true,
+          message: 'Colonna aggiunta con successo',
+          severity: 'success'
+        })
+      } catch (error) {
+        console.error('Errore durante l\'aggiunta della colonna:', error)
+        setSnackbar({
+          open: true,
+          message: 'Errore durante l\'aggiunta della colonna',
+          severity: 'error'
+        })
+      } finally {
+        setLoading(false)
+        setNewColumn({ id: '', label: '', order: 0, options: [] })
+        setOpenColumnDialog(false)
       }
-      const sortedColumns = [...columns, newColumnWithOrder].sort((a, b) => a.order - b.order)
-      setColumns(sortedColumns)
-      setNewColumn({ id: '', label: '', order: 0, options: [] })
-      setOpenColumnDialog(false)
     }
   }
 
@@ -81,13 +105,35 @@ function Dashboard() {
     setOpenEditColumnDialog(true)
   }
 
-  const handleSaveColumnEdit = () => {
+  const handleSaveColumnEdit = async () => {
     if (editingColumn) {
-      setColumns(columns.map(col => 
-        col.id === editingColumn.id ? editingColumn : col
-      ))
-      setEditingColumn(null)
-      setOpenEditColumnDialog(false)
+      setLoading(true)
+      try {
+        // Aggiorna la colonna in Supabase
+        await updateColumn(editingColumn.id, editingColumn)
+        
+        // Aggiorna lo stato locale
+        setColumns(columns.map(col => 
+          col.id === editingColumn.id ? editingColumn : col
+        ))
+        
+        setSnackbar({
+          open: true,
+          message: 'Colonna aggiornata con successo',
+          severity: 'success'
+        })
+      } catch (error) {
+        console.error('Errore durante l\'aggiornamento della colonna:', error)
+        setSnackbar({
+          open: true,
+          message: 'Errore durante l\'aggiornamento della colonna',
+          severity: 'error'
+        })
+      } finally {
+        setLoading(false)
+        setEditingColumn(null)
+        setOpenEditColumnDialog(false)
+      }
     }
   }
 
@@ -101,25 +147,37 @@ function Dashboard() {
     setOpenDialog(false)
   }
 
-  // Carica i contatti da Supabase all'avvio
+  // Carica i contatti e le colonne da Supabase all'avvio
   useEffect(() => {
-    const fetchClients = async () => {
+    const fetchData = async () => {
       setLoading(true)
       setError(null)
       try {
+        // Carica le colonne
+        const columnsData = await getColumns()
+        if (columnsData.length > 0) {
+          setColumns(columnsData)
+        } else {
+          // Se non ci sono colonne nel database, sincronizza quelle predefinite
+          await syncColumns(initialColumns)
+          setColumns(initialColumns)
+        }
+        
+        // Carica i clienti
         const clientsData = await getClients()
         setContacts(clientsData)
+        
         setSnackbar({
           open: true,
-          message: 'Clienti caricati con successo',
+          message: 'Dati caricati con successo',
           severity: 'success'
         })
       } catch (err) {
-        console.error('Errore durante il caricamento dei clienti:', err)
-        setError('Errore durante il caricamento dei clienti')
+        console.error('Errore durante il caricamento dei dati:', err)
+        setError('Errore durante il caricamento dei dati')
         setSnackbar({
           open: true,
-          message: 'Errore durante il caricamento dei clienti',
+          message: 'Errore durante il caricamento dei dati',
           severity: 'error'
         })
       } finally {
@@ -127,7 +185,7 @@ function Dashboard() {
       }
     }
 
-    fetchClients()
+    fetchData()
   }, [])
 
   const handleSaveContact = async () => {
@@ -389,13 +447,42 @@ function Dashboard() {
       </TableContainer>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, mt: 2 }}>
-        <Button
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenColumnDialog(true)}
-        >
-          Aggiungi Colonna
-        </Button>
+        <Box>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenColumnDialog(true)}
+            sx={{ mr: 2 }}
+          >
+            Aggiungi Colonna
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={async () => {
+              setLoading(true)
+              try {
+                await syncColumns(columns)
+                setSnackbar({
+                  open: true,
+                  message: 'Colonne sincronizzate con successo',
+                  severity: 'success'
+                })
+              } catch (error) {
+                console.error('Errore durante la sincronizzazione delle colonne:', error)
+                setSnackbar({
+                  open: true,
+                  message: 'Errore durante la sincronizzazione delle colonne',
+                  severity: 'error'
+                })
+              } finally {
+                setLoading(false)
+              }
+            }}
+          >
+            Sincronizza Colonne
+          </Button>
+        </Box>
         
         <Fab
           color="primary"
